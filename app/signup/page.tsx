@@ -1,0 +1,386 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { trpc } from "@/lib/trpc/client";
+import Link from "next/link";
+
+type SignupFormData = {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  dateOfBirth: string;
+  ssn: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+};
+
+export default function SignupPage() {
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [error, setError] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    trigger,
+  } = useForm<SignupFormData>();
+  const signupMutation = trpc.auth.signup.useMutation();
+
+  const password = watch("password");
+
+  const nextStep = async () => {
+    let fieldsToValidate: (keyof SignupFormData)[] = [];
+
+    if (step === 1) {
+      fieldsToValidate = ["email", "password", "confirmPassword"];
+    } else if (step === 2) {
+      fieldsToValidate = ["firstName", "lastName", "phoneNumber", "dateOfBirth"];
+    }
+
+    const isValid = await trigger(fieldsToValidate);
+    if (isValid) {
+      setStep(step + 1);
+    }
+  };
+
+  const prevStep = () => setStep(step - 1);
+
+  const onSubmit = async (data: SignupFormData) => {
+    try {
+      setError("");
+      await signupMutation.mutateAsync(data);
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Create your account</h2>
+          <p className="mt-2 text-center text-sm text-gray-600">Step {step} of 3</p>
+        </div>
+
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+          {step === 1 && (
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  Email
+                </label>
+                <input
+                  {...register("email", {
+                    required: "Email is required",
+                    pattern: {
+                      value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/i,
+                      message: "Invalid email address format",
+                    },
+                    validate: {
+                      validTld: (value) => {
+                        const invalidTlds = [".con", ".c0m", ".comm", ".netl", ".orgn"];
+                        const lowerValue = value.toLowerCase();
+                        if (invalidTlds.some((tld) => lowerValue.endsWith(tld))) {
+                          return "Email contains invalid domain extension";
+                        }
+                        return true;
+                      },
+                    },
+                  })}
+                  type="email"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                />
+                {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Password
+                </label>
+                <input
+                  {...register("password", {
+                    required: "Password is required",
+                    minLength: {
+                      value: 8,
+                      message: "Password must be at least 8 characters",
+                    },
+                    validate: {
+                      notCommon: (value) => {
+                        const commonPasswords = ["password", "12345678", "qwerty"];
+                        return !commonPasswords.includes(value.toLowerCase()) || "Password is too common";
+                      },
+                      hasNumber: (value) => /\d/.test(value) || "Password must contain a number",
+                      hasUpperCase: (value) => /[A-Z]/.test(value) || "Password must contain an uppercase letter",
+                      hasLowerCase: (value) => /[a-z]/.test(value) || "Password must contain a lowercase letter",
+                      hasSpecialChar: (value) =>
+                        /[!@#$%^&*(),.?":{}|<>]/.test(value) || "Password must contain a special character",
+                    },
+                  })}
+                  type="password"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                />
+                {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>}
+              </div>
+
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                  Confirm Password
+                </label>
+                <input
+                  {...register("confirmPassword", {
+                    required: "Please confirm your password",
+                    validate: (value) => value === password || "Passwords do not match",
+                  })}
+                  type="password"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                />
+                {errors.confirmPassword && (
+                  <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+                    First Name
+                  </label>
+                  <input
+                    {...register("firstName", { required: "First name is required" })}
+                    type="text"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                  />
+                  {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>}
+                </div>
+
+                <div>
+                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+                    Last Name
+                  </label>
+                  <input
+                    {...register("lastName", { required: "Last name is required" })}
+                    type="text"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                  />
+                  {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">
+                  Phone Number
+                </label>
+                <input
+                  {...register("phoneNumber", {
+                    required: "Phone number is required",
+                    validate: {
+                      format: (value) => {
+                        // US phone number: (xxx) xxx-xxxx, xxx-xxx-xxxx, xxx.xxx.xxxx, xxxxxxxxxx, or +1xxxxxxxxxx
+                        const usFormat = /^(\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})$/;
+                        // International: + followed by 1-15 digits
+                        const intlFormat = /^\+\d{1,15}$/;
+                        const normalized = value.replace(/\s/g, "");
+                        if (usFormat.test(normalized) || intlFormat.test(normalized)) {
+                          return true;
+                        }
+                        return "Invalid phone number format. Use US format (xxx) xxx-xxxx or international +xxxxxxxxxxxxx";
+                      },
+                    },
+                  })}
+                  type="tel"
+                  placeholder="1234567890"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                />
+                {errors.phoneNumber && <p className="mt-1 text-sm text-red-600">{errors.phoneNumber.message}</p>}
+              </div>
+
+              <div>
+                <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700">
+                  Date of Birth
+                </label>
+                <input
+                  {...register("dateOfBirth", {
+                    required: "Date of birth is required",
+                    validate: (value) => {
+                      const birthDate = new Date(value);
+                      const today = new Date();
+                      const age = today.getFullYear() - birthDate.getFullYear();
+                      const monthDiff = today.getMonth() - birthDate.getMonth();
+                      const dayDiff = today.getDate() - birthDate.getDate();
+                      const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
+
+                      if (birthDate > today) {
+                        return "Date of birth cannot be in the future";
+                      }
+                      if (actualAge < 18) {
+                        return "You must be at least 18 years old";
+                      }
+                      return true;
+                    },
+                  })}
+                  type="date"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                />
+                {errors.dateOfBirth && <p className="mt-1 text-sm text-red-600">{errors.dateOfBirth.message}</p>}
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="ssn" className="block text-sm font-medium text-gray-700">
+                  Social Security Number
+                </label>
+                <input
+                  {...register("ssn", {
+                    required: "SSN is required",
+                    pattern: {
+                      value: /^\d{9}$/,
+                      message: "SSN must be 9 digits",
+                    },
+                  })}
+                  type="text"
+                  placeholder="123456789"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                />
+                {errors.ssn && <p className="mt-1 text-sm text-red-600">{errors.ssn.message}</p>}
+              </div>
+
+              <div>
+                <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+                  Street Address
+                </label>
+                <input
+                  {...register("address", { required: "Address is required" })}
+                  type="text"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                />
+                {errors.address && <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>}
+              </div>
+
+              <div className="grid grid-cols-6 gap-4">
+                <div className="col-span-3">
+                  <label htmlFor="city" className="block text-sm font-medium text-gray-700">
+                    City
+                  </label>
+                  <input
+                    {...register("city", { required: "City is required" })}
+                    type="text"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                  />
+                  {errors.city && <p className="mt-1 text-sm text-red-600">{errors.city.message}</p>}
+                </div>
+
+                <div className="col-span-1">
+                  <label htmlFor="state" className="block text-sm font-medium text-gray-700">
+                    State
+                  </label>
+                  <input
+                    {...register("state", {
+                      required: "State is required",
+                      pattern: {
+                        value: /^[A-Z]{2}$/,
+                        message: "Use 2-letter state code",
+                      },
+                      validate: (value) => {
+                        const validStates = [
+                          "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+                          "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+                          "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+                          "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+                          "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+                          "DC",
+                        ];
+                        return validStates.includes(value.toUpperCase()) || "Invalid state code";
+                      },
+                    })}
+                    type="text"
+                    placeholder="CA"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                  />
+                  {errors.state && <p className="mt-1 text-sm text-red-600">{errors.state.message}</p>}
+                </div>
+
+                <div className="col-span-2">
+                  <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700">
+                    ZIP Code
+                  </label>
+                  <input
+                    {...register("zipCode", {
+                      required: "ZIP code is required",
+                      pattern: {
+                        value: /^\d{5}$/,
+                        message: "ZIP code must be 5 digits",
+                      },
+                    })}
+                    type="text"
+                    placeholder="12345"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
+                  />
+                  {errors.zipCode && <p className="mt-1 text-sm text-red-600">{errors.zipCode.message}</p>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-md bg-red-50 p-4">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
+          <div className="flex justify-between">
+            {step > 1 && (
+              <button
+                type="button"
+                onClick={prevStep}
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Previous
+              </button>
+            )}
+
+            {step < 3 ? (
+              <button
+                type="button"
+                onClick={nextStep}
+                className="ml-auto px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={signupMutation.isPending}
+                className="ml-auto px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {signupMutation.isPending ? "Creating account..." : "Create Account"}
+              </button>
+            )}
+          </div>
+        </form>
+
+        <p className="text-center text-sm text-gray-600">
+          Already have an account?{" "}
+          <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+            Sign in
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}
