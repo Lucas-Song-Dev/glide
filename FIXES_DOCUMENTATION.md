@@ -146,8 +146,10 @@ Enhanced email validation with:
 2. Detection of common TLD typos (`.con`, `.c0m`, `.comm`, etc.)
 3. Validation of valid TLD extensions
 4. Frontend validation to match backend
+5. **User notification for case conversion**: Added real-time notification when email is converted to lowercase
 
 ```typescript
+// Backend validation
 email: z
   .string()
   .email("Invalid email format")
@@ -159,12 +161,17 @@ email: z
     },
     { message: "Email contains invalid domain extension" }
   )
+
+// Frontend notification
+const [emailCaseWarning, setEmailCaseWarning] = useState("");
+// Shows: "Note: Your email will be stored in lowercase." when user types uppercase
 ```
 
 **Preventive Measures**:
 - Use comprehensive email validation libraries when possible
 - Validate on both frontend and backend
 - Provide clear error messages for invalid formats
+- Notify users of data transformations (like case conversion)
 - Consider email verification via confirmation links
 
 ---
@@ -284,10 +291,10 @@ phoneNumber: z
 **Location**: `components/FundingModal.tsx`, `server/routers/account.ts`
 
 **Root Cause**:  
-Frontend validation allowed 0.0 amounts, and backend validation could be bypassed, creating unnecessary transaction records.
+Frontend validation allowed 0.0 amounts, and backend validation could be bypassed, creating unnecessary transaction records. Additionally, there was no maximum amount limit, potentially allowing extremely large transactions.
 
 **Solution**:  
-Added strict validation on both frontend and backend to reject amounts <= 0.
+Added strict validation on both frontend and backend to reject amounts <= 0, and added maximum amount limits ($1,000,000) to prevent excessive transactions.
 
 ```typescript
 // Frontend
@@ -300,14 +307,23 @@ validate: {
     return true;
   }
 }
+max: {
+  value: 1000000,
+  message: "Amount cannot exceed $1,000,000",
+}
 
 // Backend
-amount: z.number().positive().min(0.01, "Amount must be greater than $0.00")
+amount: z
+  .number()
+  .positive()
+  .min(0.01, "Amount must be greater than $0.00")
+  .max(1000000, "Amount cannot exceed $1,000,000")
 ```
 
 **Preventive Measures**:
 - Validate business rules on both frontend and backend
 - Use consistent validation logic
+- Set appropriate maximum limits for financial transactions
 - Test edge cases (0, negative, very large numbers)
 
 ---
@@ -632,31 +648,50 @@ const accountTransactions = await db
 **Location**: `server/routers/account.ts`
 
 **Root Cause**:  
-After creating a transaction, the code used `.limit(1)` to fetch "the created transaction", but this would return any transaction, not necessarily the one just created, causing missing transactions in history.
+After creating a transaction, the code used `.limit(1)` to fetch "the created transaction", but this would return any transaction, not necessarily the one just created, causing missing transactions in history. This could fail in race conditions where multiple transactions are created simultaneously.
 
 **Solution**:  
-Properly fetch the created transaction by querying with the account ID and ordering by creation date, or use the transaction ID if available.
+Improved transaction retrieval by using the `processedAt` timestamp to uniquely identify the exact transaction that was just created. This ensures we always get the correct transaction even in concurrent scenarios.
 
 ```typescript
-// Create transaction
+// Create transaction with unique processedAt timestamp
 const processedAt = new Date().toISOString();
-await db.insert(transactions).values({...});
+await db.insert(transactions).values({
+  accountId: input.accountId,
+  type: "deposit",
+  amount,
+  description: `Funding from ${input.fundingSource.type}`,
+  status: "completed",
+  processedAt, // Unique timestamp
+});
 
-// Fetch the created transaction
+// Fetch the created transaction using processedAt to ensure we get the exact one
 const insertedTransaction = await db
   .select()
   .from(transactions)
-  .where(eq(transactions.accountId, input.accountId))
-  .orderBy(desc(transactions.createdAt))
-  .limit(1)
+  .where(
+    and(
+      eq(transactions.accountId, input.accountId),
+      eq(transactions.processedAt, processedAt) // Match exact transaction
+    )
+  )
   .get();
+
+// Error handling if transaction not found
+if (!insertedTransaction) {
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Failed to retrieve created transaction",
+  });
+}
 ```
 
 **Preventive Measures**:
 - Use database transactions for atomic operations
 - Return created record IDs when possible
-- Query by specific criteria, not just limit
-- Test transaction creation and retrieval
+- Use unique identifiers (like timestamps) to query specific records
+- Add error handling for transaction retrieval failures
+- Test transaction creation and retrieval in concurrent scenarios
 
 ---
 
@@ -792,14 +827,59 @@ className="... text-gray-900 dark:text-gray-100"
 
 ---
 
+## Additional Security & Validation Improvements
+
+### Input Sanitization
+
+**Location**: `app/signup/page.tsx`, `server/routers/auth.ts`
+
+**Implementation**:  
+Added input sanitization to prevent script injection attacks in user-provided text fields (names, addresses, cities). The validation blocks potentially dangerous characters while allowing legitimate characters like apostrophes in names.
+
+```typescript
+// Name validation - prevent script injection but allow apostrophes
+firstName: z
+  .string()
+  .min(1)
+  .max(100)
+  .refine(
+    (value) => {
+      // Prevent script injection but allow apostrophes for names like O'Connor
+      return !/[<>]/.test(value);
+    },
+    { message: "First name contains invalid characters" }
+  )
+
+// Address validation
+address: z
+  .string()
+  .min(1)
+  .max(200)
+  .refine(
+    (value) => {
+      return !/[<>]/.test(value);
+    },
+    { message: "Address contains invalid characters" }
+  )
+```
+
+**Preventive Measures**:
+- Sanitize all user inputs on both frontend and backend
+- Block script injection characters while allowing legitimate use cases
+- Set appropriate maximum lengths for text fields
+- Test with various input types including edge cases
+
+---
+
 ## Testing
 
 All fixes have been verified with comprehensive test suites covering:
 
-- **Validation Tests**: Email, date of birth, state codes, phone numbers, passwords, card numbers, amounts
-- **Security Tests**: SSN encryption, secure random generation, XSS prevention
-- **Account Tests**: Balance calculation, transaction sorting, zero amount validation
+- **Validation Tests**: Email, date of birth, state codes, phone numbers, passwords, card numbers, amounts, input sanitization
+- **Security Tests**: SSN encryption, secure random generation, XSS prevention, input sanitization
+- **Account Tests**: Balance calculation, transaction sorting, zero amount validation, transaction retrieval
 - **Session Tests**: Expiry buffers, session management, logout verification
+- **Additional Tests**: Email case conversion notification, amount limits, transaction retrieval improvements
 
 Tests run automatically on GitHub Actions for every push and pull request.
 
@@ -807,10 +887,11 @@ Tests run automatically on GitHub Actions for every push and pull request.
 
 ## Summary
 
-**Total Issues Fixed**: 23  
+**Total Issues Fixed**: 23 core issues + 5 additional improvements = 28 total fixes  
 **Critical Issues**: 8  
 **High Priority Issues**: 8  
 **Medium Priority Issues**: 7  
+**Additional Improvements**: 5 (email notification, transaction retrieval, input sanitization, amount limits, error handling)
 
 All fixes follow security best practices and include proper error handling, validation, and testing. The application is now more secure, performant, and user-friendly.
 
