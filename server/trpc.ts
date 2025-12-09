@@ -55,10 +55,11 @@ export async function createContext(opts: CreateNextContextOptions | FetchCreate
       const session = await db.select().from(sessions).where(eq(sessions.token, token)).get();
 
       // Add 5 minute buffer before expiry
-      const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
-      const expiryTime = new Date(session.expiresAt).getTime() - bufferTime;
+      const bufferTime = 5 * 60 * 1000;
+      const expiryTime = session ? new Date(session.expiresAt).getTime() - bufferTime : 0;
+
       if (session && expiryTime > new Date().getTime()) {
-        user = await db.select().from(users).where(eq(users.id, decoded.userId)).get();
+        user = db.select().from(users).where(eq(users.id, decoded.userId)).get();
       }
     } catch (error) {
       // Invalid token
