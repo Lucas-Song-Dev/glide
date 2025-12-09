@@ -25,6 +25,7 @@ export default function SignupPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
+  const [emailCaseWarning, setEmailCaseWarning] = useState("");
 
   const {
     register,
@@ -93,14 +94,31 @@ export default function SignupPage() {
                         if (invalidTlds.some((tld) => lowerValue.endsWith(tld))) {
                           return "Email contains invalid domain extension";
                         }
+                        // Notify user if email will be converted to lowercase
+                        if (value !== value.toLowerCase()) {
+                          setEmailCaseWarning("Note: Your email will be stored in lowercase.");
+                        } else {
+                          setEmailCaseWarning("");
+                        }
                         return true;
                       },
+                    },
+                    onChange: (e) => {
+                      const value = e.target.value;
+                      if (value && value !== value.toLowerCase()) {
+                        setEmailCaseWarning("Note: Your email will be stored in lowercase.");
+                      } else {
+                        setEmailCaseWarning("");
+                      }
                     },
                   })}
                   type="email"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
                 />
                 {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+                {emailCaseWarning && !errors.email && (
+                  <p className="mt-1 text-sm text-blue-600">{emailCaseWarning}</p>
+                )}
               </div>
 
               <div>
@@ -159,7 +177,17 @@ export default function SignupPage() {
                     First Name
                   </label>
                   <input
-                    {...register("firstName", { required: "First name is required" })}
+                    {...register("firstName", {
+                      required: "First name is required",
+                      maxLength: {
+                        value: 100,
+                        message: "First name must be less than 100 characters",
+                      },
+                      pattern: {
+                        value: /^[^<>]*$/,
+                        message: "First name contains invalid characters",
+                      },
+                    })}
                     type="text"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
                   />
@@ -171,7 +199,17 @@ export default function SignupPage() {
                     Last Name
                   </label>
                   <input
-                    {...register("lastName", { required: "Last name is required" })}
+                    {...register("lastName", {
+                      required: "Last name is required",
+                      maxLength: {
+                        value: 100,
+                        message: "Last name must be less than 100 characters",
+                      },
+                      pattern: {
+                        value: /^[^<>]*$/,
+                        message: "Last name contains invalid characters",
+                      },
+                    })}
                     type="text"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
                   />
@@ -265,7 +303,17 @@ export default function SignupPage() {
                   Street Address
                 </label>
                 <input
-                  {...register("address", { required: "Address is required" })}
+                  {...register("address", {
+                    required: "Address is required",
+                    maxLength: {
+                      value: 200,
+                      message: "Address must be less than 200 characters",
+                    },
+                    pattern: {
+                      value: /^[^<>]*$/,
+                      message: "Address contains invalid characters",
+                    },
+                  })}
                   type="text"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
                 />
@@ -278,7 +326,17 @@ export default function SignupPage() {
                     City
                   </label>
                   <input
-                    {...register("city", { required: "City is required" })}
+                    {...register("city", {
+                      required: "City is required",
+                      maxLength: {
+                        value: 100,
+                        message: "City must be less than 100 characters",
+                      },
+                      pattern: {
+                        value: /^[^<>]*$/,
+                        message: "City contains invalid characters",
+                      },
+                    })}
                     type="text"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 dark:text-gray-100"
                   />

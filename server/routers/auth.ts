@@ -45,8 +45,28 @@ export const authRouter = router({
           .regex(/[a-z]/, "Password must contain a lowercase letter")
           .regex(/\d/, "Password must contain a number")
           .regex(/[!@#$%^&*(),.?":{}|<>]/, "Password must contain a special character"),
-        firstName: z.string().min(1),
-        lastName: z.string().min(1),
+        firstName: z
+          .string()
+          .min(1)
+          .max(100)
+          .refine(
+            (value) => {
+              // Sanitize: prevent script injection but allow apostrophes for names like O'Connor
+              return !/[<>]/.test(value);
+            },
+            { message: "First name contains invalid characters" }
+          ),
+        lastName: z
+          .string()
+          .min(1)
+          .max(100)
+          .refine(
+            (value) => {
+              // Sanitize: prevent script injection but allow apostrophes for names like O'Connor
+              return !/[<>]/.test(value);
+            },
+            { message: "Last name contains invalid characters" }
+          ),
         phoneNumber: z
           .string()
           .refine(
@@ -77,8 +97,28 @@ export const authRouter = router({
           { message: "You must be at least 18 years old and date cannot be in the future" }
         ),
         ssn: z.string().regex(/^\d{9}$/),
-        address: z.string().min(1),
-        city: z.string().min(1),
+        address: z
+          .string()
+          .min(1)
+          .max(200)
+          .refine(
+            (value) => {
+              // Sanitize: prevent script injection
+              return !/[<>]/.test(value);
+            },
+            { message: "Address contains invalid characters" }
+          ),
+        city: z
+          .string()
+          .min(1)
+          .max(100)
+          .refine(
+            (value) => {
+              // Sanitize: prevent script injection
+              return !/[<>]/.test(value);
+            },
+            { message: "City contains invalid characters" }
+          ),
         state: z
           .string()
           .length(2)

@@ -75,7 +75,11 @@ export const accountRouter = router({
     .input(
       z.object({
         accountId: z.number(),
-        amount: z.number().positive().min(0.01, "Amount must be greater than $0.00"),
+        amount: z
+          .number()
+          .positive()
+          .min(0.01, "Amount must be greater than $0.00")
+          .max(1000000, "Amount cannot exceed $1,000,000"),
         fundingSource: z
           .object({
             type: z.enum(["card", "bank"]),
@@ -131,13 +135,16 @@ export const accountRouter = router({
         processedAt,
       });
 
-      // Fetch the created transaction
+      // Fetch the created transaction using processedAt to ensure we get the exact one
       const insertedTransaction = await db
         .select()
         .from(transactions)
-        .where(eq(transactions.accountId, input.accountId))
-        .orderBy(desc(transactions.createdAt))
-        .limit(1)
+        .where(
+          and(
+            eq(transactions.accountId, input.accountId),
+            eq(transactions.processedAt, processedAt)
+          )
+        )
         .get();
 
       // Update account balance (using proper decimal arithmetic)
@@ -148,6 +155,13 @@ export const accountRouter = router({
           balance: newBalance,
         })
         .where(eq(accounts.id, input.accountId));
+
+      if (!insertedTransaction) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to retrieve created transaction",
+        });
+      }
 
       return {
         transaction: insertedTransaction,

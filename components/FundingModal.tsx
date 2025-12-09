@@ -91,8 +91,8 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
                     },
                   },
                   max: {
-                    value: 10000,
-                    message: "Amount cannot exceed $10,000",
+                    value: 1000000,
+                    message: "Amount cannot exceed $1,000,000",
                   },
                 })}
                 type="text"
